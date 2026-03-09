@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ZPD 拍貼機測試</title>
+    <style>
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f4f7f6;
+            text-align: center;
+            padding: 20px;
+        }
+        .camera-box {
+            position: relative;
+            width: 100%;
+            max-width: 500px;
+            margin: 0 auto 20px auto;
+            border: 4px solid #2c3e50;
+            border-radius: 12px;
+            overflow: hidden;
+            background-color: #000;
+        }
+        /* playsinline 是讓 iPad 瀏覽器不要全螢幕播放影片的關鍵 */
+        #video {
+            width: 100%;
+            display: block;
+            /* 讓前鏡頭畫面呈現鏡像，看起來才像照鏡子 */
+            transform: scaleX(-1); 
+        }
+        .btn {
+            background-color: #e67e22;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 18px;
+            border-radius: 30px;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin: 10px;
+            font-weight: bold;
+        }
+        .btn:active {
+            transform: scale(0.95);
+        }
+        #download-btn {
+            background-color: #27ae60;
+            text-decoration: none;
+            display: inline-block;
+        }
+        #result-box {
+            display: none;
+            margin-top: 20px;
+        }
+        #photo {
+            width: 100%;
+            max-width: 500px;
+            border-radius: 12px;
+            border: 4px solid #f39c12;
+        }
+    </style>
+</head>
+<body>
+
+    <h2>🐰 ZPD 榮譽拍貼機 🦊</h2>
+    
+    <div class="camera-box">
+        <video id="video" autoplay playsinline></video>
+    </div>
+
+    <div>
+        <button id="snap-btn" class="btn">📸 拍下結業合照</button>
+    </div>
+
+    <canvas id="canvas" style="display:none;"></canvas>
+
+    <div id="result-box">
+        <h3>🎉 恭喜通關！這是你的專屬照片 🎉</h3>
+        <img id="photo" alt="你的拍貼照">
+        <br>
+        <a id="download-btn" class="btn">⬇️ 下載儲存至 iPad</a>
+    </div>
+
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const snapBtn = document.getElementById('snap-btn');
+        const resultBox = document.getElementById('result-box');
+        const photo = document.getElementById('photo');
+        const downloadBtn = document.getElementById('download-btn');
+
+        // 啟動相機的函式
+        async function startCamera() {
+            try {
+                // 請求相機權限，facingMode: "user" 指定使用前鏡頭
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: "user" },
+                    audio: false
+                });
+                video.srcObject = stream;
+            } catch (err) {
+                console.error("相機啟動失敗: ", err);
+                alert("無法啟動相機！請確認您已允許相機權限，且網頁是在 HTTPS 環境下執行。");
+            }
+        }
+
+        // 頁面載入時啟動相機
+        startCamera();
+
+        // 拍照按鈕事件
+        snapBtn.addEventListener('click', () => {
+            const context = canvas.getContext('2d');
+            
+            // 設定 canvas 尺寸與影片原始解析度相同
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+
+            // 1. 處理鏡像問題（因為預覽時我們反轉了，存檔時要翻轉回來，或是直接存鏡像）
+            // 這裡我們把畫布翻轉，讓存出來的照片和預覽時看到的一樣
+            context.translate(canvas.width, 0);
+            context.scale(-1, 1);
+            
+            // 2. 將影片當前畫面畫上 Canvas
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            // 3. 翻轉回來，準備寫上正向的文字浮水印
+            context.translate(canvas.width, 0);
+            context.scale(-1, 1);
+
+            // 4. 在照片下方加上半透明的黑底區塊，讓字體更清楚
+            context.fillStyle = "rgba(0, 0, 0, 0.5)";
+            context.fillRect(0, canvas.height - 80, canvas.width, 80);
+
+            // 5. 畫上過關專屬浮水印文字
+            context.font = "bold 40px 'Helvetica Neue', sans-serif";
+            context.fillStyle = "#f1c40f"; // 動物方程式的經典橘黃色
+            context.textAlign = "center";
+            context.fillText("新營 ZPD 榮譽探員結業留念", canvas.width / 2, canvas.height - 25);
+
+            // 6. 將 Canvas 轉成圖片網址 (Data URL)
+            const dataURL = canvas.toDataURL('image/png');
+            
+            // 7. 將圖片顯示在下方的 img 標籤中
+            photo.src = dataURL;
+            resultBox.style.display = "block";
+
+            // 8. 設定下載按鈕的連結與預設檔名
+            downloadBtn.href = dataURL;
+            downloadBtn.download = "ZPD_Mission_Completed.png";
+        });
+    </script>
+
+</body>
+</html>
