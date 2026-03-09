@@ -3,50 +3,71 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ZPD 拍貼機測試</title>
+    <title>ZPD 榮譽拍貼機 - 邊框選擇版</title>
     <style>
         body {
             font-family: 'Helvetica Neue', Arial, sans-serif;
             background-color: #f4f7f6;
             text-align: center;
-            padding: 20px;
+            padding: 10px;
         }
+        /* 攝影棚區域，設定 relative 讓相框可以絕對定位疊在上面 */
         .camera-box {
             position: relative;
             width: 100%;
-            max-width: 500px;
-            margin: 0 auto 20px auto;
+            max-width: 600px;
+            margin: 0 auto 15px auto;
             border: 4px solid #2c3e50;
             border-radius: 12px;
             overflow: hidden;
             background-color: #000;
         }
-        /* playsinline 是讓 iPad 瀏覽器不要全螢幕播放影片的關鍵 */
         #video {
             width: 100%;
             display: block;
-            /* 讓前鏡頭畫面呈現鏡像，看起來才像照鏡子 */
-            transform: scaleX(-1); 
+            transform: scaleX(-1); /* 讓影像像照鏡子一樣 */
+        }
+        /* 相框預覽圖層：疊在影片上方，並且不阻擋點擊 (pointer-events: none) */
+        #frame-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+        }
+        /* 按鈕與選單樣式 */
+        .controls {
+            margin-bottom: 20px;
         }
         .btn {
-            background-color: #e67e22;
+            background-color: #3498db;
             color: white;
             border: none;
-            padding: 12px 24px;
-            font-size: 18px;
-            border-radius: 30px;
+            padding: 10px 15px;
+            font-size: 16px;
+            border-radius: 20px;
             cursor: pointer;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            margin: 10px;
+            margin: 5px;
             font-weight: bold;
+            transition: background-color 0.2s;
         }
-        .btn:active {
-            transform: scale(0.95);
+        .btn.active {
+            background-color: #e67e22; /* 選中的相框按鈕變成橘色 */
+            transform: scale(1.05);
+        }
+        .btn-snap {
+            background-color: #e74c3c;
+            font-size: 20px;
+            padding: 15px 30px;
+            border-radius: 30px;
         }
         #download-btn {
             background-color: #27ae60;
             text-decoration: none;
             display: inline-block;
+            margin-top: 15px;
         }
         #result-box {
             display: none;
@@ -54,7 +75,7 @@
         }
         #photo {
             width: 100%;
-            max-width: 500px;
+            max-width: 600px;
             border-radius: 12px;
             border: 4px solid #f39c12;
         }
@@ -62,14 +83,22 @@
 </head>
 <body>
 
-    <h2>🐰 ZPD 榮譽拍貼機 🦊</h2>
+    <h2>🐰 新營 ZPD 拍貼機 🦊</h2>
     
+    <div class="controls">
+        <p>請選擇你的專屬探員邊框：</p>
+        <button class="btn frame-btn active" data-src="frame_judy.png">🐰 茱蒂款</button>
+        <button class="btn frame-btn" data-src="frame_nick.png">🦊 尼克款</button>
+        <button class="btn frame-btn" data-src="frame_flash.png">🦥 樹懶款</button>
+    </div>
+
     <div class="camera-box">
         <video id="video" autoplay playsinline></video>
+        <img id="frame-overlay" src="frame_judy.png" alt="" onerror="this.style.display='none'">
     </div>
 
     <div>
-        <button id="snap-btn" class="btn">📸 拍下結業合照</button>
+        <button id="snap-btn" class="btn btn-snap">📸 拍下結業合照</button>
     </div>
 
     <canvas id="canvas" style="display:none;"></canvas>
@@ -88,11 +117,12 @@
         const resultBox = document.getElementById('result-box');
         const photo = document.getElementById('photo');
         const downloadBtn = document.getElementById('download-btn');
+        const frameOverlay = document.getElementById('frame-overlay');
+        const frameBtns = document.querySelectorAll('.frame-btn');
 
-        // 啟動相機的函式
+        // 1. 啟動相機
         async function startCamera() {
             try {
-                // 請求相機權限，facingMode: "user" 指定使用前鏡頭
                 const stream = await navigator.mediaDevices.getUserMedia({
                     video: { facingMode: "user" },
                     audio: false
@@ -100,55 +130,65 @@
                 video.srcObject = stream;
             } catch (err) {
                 console.error("相機啟動失敗: ", err);
-                alert("無法啟動相機！請確認您已允許相機權限，且網頁是在 HTTPS 環境下執行。");
+                alert("無法啟動相機！請確認您已允許相機權限。");
             }
         }
-
-        // 頁面載入時啟動相機
         startCamera();
 
-        // 拍照按鈕事件
+        // 2. 切換相框的互動邏輯
+        frameBtns.forEach(btn => {
+            btn.addEventListener('click', function() {
+                // 移除所有按鈕的 active 狀態
+                frameBtns.forEach(b => b.classList.remove('active'));
+                // 標示目前選中的按鈕
+                this.classList.add('active');
+                
+                // 更改透明相框的圖片來源
+                const newSrc = this.getAttribute('data-src');
+                frameOverlay.src = newSrc;
+                frameOverlay.style.display = 'block'; // 確保圖片顯示
+            });
+        });
+
+        // 3. 拍照與合成邏輯
         snapBtn.addEventListener('click', () => {
             const context = canvas.getContext('2d');
-            
-            // 設定 canvas 尺寸與影片原始解析度相同
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
 
-            // 1. 處理鏡像問題（因為預覽時我們反轉了，存檔時要翻轉回來，或是直接存鏡像）
-            // 這裡我們把畫布翻轉，讓存出來的照片和預覽時看到的一樣
+            // 步驟 A：將畫布翻轉，畫上鏡像的「人像攝影機畫面」
             context.translate(canvas.width, 0);
             context.scale(-1, 1);
-            
-            // 2. 將影片當前畫面畫上 Canvas
             context.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-            // 3. 翻轉回來，準備寫上正向的文字浮水印
+            // 步驟 B：重要！把畫布「翻轉回來」，這樣相框和文字才不會變成反的
             context.translate(canvas.width, 0);
             context.scale(-1, 1);
 
-            // 4. 在照片下方加上半透明的黑底區塊，讓字體更清楚
+            // 步驟 C：疊上選擇的《動物方程式》相框
+            // 確認相框圖片有成功載入才畫上去
+            if (frameOverlay.complete && frameOverlay.naturalHeight !== 0) {
+                context.drawImage(frameOverlay, 0, 0, canvas.width, canvas.height);
+            }
+
+            // 步驟 D：畫上通關專屬浮水印文字
             context.fillStyle = "rgba(0, 0, 0, 0.5)";
             context.fillRect(0, canvas.height - 80, canvas.width, 80);
-
-            // 5. 畫上過關專屬浮水印文字
             context.font = "bold 40px 'Helvetica Neue', sans-serif";
-            context.fillStyle = "#f1c40f"; // 動物方程式的經典橘黃色
+            context.fillStyle = "#f1c40f"; 
             context.textAlign = "center";
             context.fillText("新營 ZPD 榮譽探員結業留念", canvas.width / 2, canvas.height - 25);
 
-            // 6. 將 Canvas 轉成圖片網址 (Data URL)
+            // 步驟 E：輸出並顯示
             const dataURL = canvas.toDataURL('image/png');
-            
-            // 7. 將圖片顯示在下方的 img 標籤中
             photo.src = dataURL;
             resultBox.style.display = "block";
-
-            // 8. 設定下載按鈕的連結與預設檔名
             downloadBtn.href = dataURL;
             downloadBtn.download = "ZPD_Mission_Completed.png";
+            
+            // 畫面自動捲動到成品區，方便在 iPad 上檢視
+            resultBox.scrollIntoView({ behavior: 'smooth' });
         });
     </script>
-
 </body>
 </html>
