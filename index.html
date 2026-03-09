@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ZPD 榮譽拍貼機 - 邊框選擇版</title>
+    <title>ZPD 榮譽拍貼機 - 完美比例版</title>
     <style>
         body {
             font-family: 'Helvetica Neue', Arial, sans-serif;
@@ -11,33 +11,37 @@
             text-align: center;
             padding: 10px;
         }
-        /* 攝影棚區域，設定 relative 讓相框可以絕對定位疊在上面 */
+        /* 升級：固定攝影棚的比例為 4:3，並隱藏多餘邊緣 */
         .camera-box {
             position: relative;
             width: 100%;
             max-width: 600px;
+            aspect-ratio: 4 / 3;
             margin: 0 auto 15px auto;
             border: 4px solid #2c3e50;
             border-radius: 12px;
             overflow: hidden;
             background-color: #000;
         }
+        /* 升級：使用 object-fit: cover 讓預覽畫面不變形 */
         #video {
             width: 100%;
+            height: 100%;
+            object-fit: cover;
             display: block;
-            transform: scaleX(-1); /* 讓影像像照鏡子一樣 */
+            transform: scaleX(-1);
         }
-        /* 相框預覽圖層：疊在影片上方，並且不阻擋點擊 (pointer-events: none) */
+        /* 升級：確保相框也等比例填滿 */
         #frame-overlay {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
+            object-fit: cover;
             pointer-events: none;
             z-index: 10;
         }
-        /* 按鈕與選單樣式 */
         .controls {
             margin-bottom: 20px;
         }
@@ -54,7 +58,7 @@
             transition: background-color 0.2s;
         }
         .btn.active {
-            background-color: #e67e22; /* 選中的相框按鈕變成橘色 */
+            background-color: #e67e22;
             transform: scale(1.05);
         }
         .btn-snap {
@@ -120,7 +124,6 @@
         const frameOverlay = document.getElementById('frame-overlay');
         const frameBtns = document.querySelectorAll('.frame-btn');
 
-        // 1. 啟動相機
         async function startCamera() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({
@@ -135,58 +138,66 @@
         }
         startCamera();
 
-        // 2. 切換相框的互動邏輯
         frameBtns.forEach(btn => {
             btn.addEventListener('click', function() {
-                // 移除所有按鈕的 active 狀態
                 frameBtns.forEach(b => b.classList.remove('active'));
-                // 標示目前選中的按鈕
                 this.classList.add('active');
-                
-                // 更改透明相框的圖片來源
                 const newSrc = this.getAttribute('data-src');
                 frameOverlay.src = newSrc;
-                frameOverlay.style.display = 'block'; // 確保圖片顯示
+                frameOverlay.style.display = 'block';
             });
         });
 
-        // 3. 拍照與合成邏輯
         snapBtn.addEventListener('click', () => {
             const context = canvas.getContext('2d');
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
+            
+            // 升級 1：以相框的實際尺寸建立高畫質畫布 (預設 1440x1080)
+            canvas.width = (frameOverlay.naturalWidth > 0) ? frameOverlay.naturalWidth : 1440;
+            canvas.height = (frameOverlay.naturalHeight > 0) ? frameOverlay.naturalHeight : 1080;
 
-            // 步驟 A：將畫布翻轉，畫上鏡像的「人像攝影機畫面」
+            const frameW = canvas.width;
+            const frameH = canvas.height;
+            const videoW = video.videoWidth;
+            const videoH = video.videoHeight;
+
+            // 升級 2：計算智慧裁切比例，確保不變形
+            const scale = Math.max(frameW / videoW, frameH / videoH);
+            const drawW = videoW * scale;
+            const drawH = videoH * scale;
+            const startX = (frameW - drawW) / 2;
+            const startY = (frameH - drawH) / 2;
+
+            // 步驟 A：翻轉並畫上攝影機畫面
             context.translate(canvas.width, 0);
             context.scale(-1, 1);
-            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            context.drawImage(video, startX, startY, drawW, drawH);
 
-            // 步驟 B：重要！把畫布「翻轉回來」，這樣相框和文字才不會變成反的
+            // 步驟 B：翻轉回來
             context.translate(canvas.width, 0);
             context.scale(-1, 1);
 
-            // 步驟 C：疊上選擇的《動物方程式》相框
-            // 確認相框圖片有成功載入才畫上去
+            // 步驟 C：疊上相框
             if (frameOverlay.complete && frameOverlay.naturalHeight !== 0) {
                 context.drawImage(frameOverlay, 0, 0, canvas.width, canvas.height);
             }
 
-            // 步驟 D：畫上通關專屬浮水印文字
+            // 步驟 D：畫上浮水印與文字
             context.fillStyle = "rgba(0, 0, 0, 0.5)";
-            context.fillRect(0, canvas.height - 80, canvas.width, 80);
-            context.font = "bold 40px 'Helvetica Neue', sans-serif";
+            context.fillRect(0, canvas.height - 100, canvas.width, 100);
+            // 根據畫布大小微調字體大小
+            const fontSize = Math.floor(canvas.width * 0.045); 
+            context.font = `bold ${fontSize}px 'Helvetica Neue', sans-serif`;
             context.fillStyle = "#f1c40f"; 
             context.textAlign = "center";
-            context.fillText("新英 ZPD 榮譽探員結業留念", canvas.width / 2, canvas.height - 25);
+            context.fillText("新英 ZPD 榮譽探員結業留念", canvas.width / 2, canvas.height - 35);
 
-            // 步驟 E：輸出並顯示
+            // 步驟 E：輸出
             const dataURL = canvas.toDataURL('image/png');
             photo.src = dataURL;
             resultBox.style.display = "block";
             downloadBtn.href = dataURL;
             downloadBtn.download = "ZPD_Mission_Completed.png";
             
-            // 畫面自動捲動到成品區，方便在 iPad 上檢視
             resultBox.scrollIntoView({ behavior: 'smooth' });
         });
     </script>
